@@ -59,7 +59,6 @@ endif()
 add_executable(${EXE_NAME})
 
 add_subdirectory(Drivers)
-add_subdirectory(external)
 add_subdirectory(Core)
 add_subdirectory(App)
 

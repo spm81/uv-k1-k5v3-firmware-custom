@@ -1,7 +1,7 @@
 
 add_library(App INTERFACE)
 target_include_directories(App INTERFACE .)
-target_link_libraries(App INTERFACE PY32F071_Driver printf)
+target_link_libraries(App INTERFACE PY32F071_Driver)
 target_compile_definitions(App INTERFACE PRINTF_INCLUDE_CONFIG_H)
 
 target_sources(App INTERFACE
@@ -10,13 +10,13 @@ target_sources(App INTERFACE
     # driver/backlight.c
     # driver/bk4819.c
     # driver/eeprom.c
-    # driver/gpio.c
+    driver/gpio.c
     # driver/i2c.c
-    # driver/keyboard.c
+    driver/keyboard.c
     # driver/spi.c
     # driver/st7565.c
-    # driver/system.c
-    # driver/systick.c
+    driver/system.c
+    driver/systick.c
     # Main
     app/action.c
     app/app.c
@@ -85,6 +85,10 @@ if(NOT SQL_TONE)
 endif()
 target_compile_definitions(App INTERFACE SQL_TONE=${SQL_TONE})
 
+if(ENABLE_AIRCOPY AND ENABLE_UART)
+    target_sources(App INTERFACE driver/crc.c)
+endif()
+
 # ---- STOCK QUANSHENG FEATURES ----
 
 enable_feature(ENABLE_FMRADIO
@@ -95,7 +99,7 @@ enable_feature(ENABLE_FMRADIO
 enable_feature(ENABLE_UART
     driver/uart.c 
     app/uart.c
-    driver/aes.c
+    # driver/aes.c
 )
 enable_feature(ENABLE_AIRCOPY
     app/aircopy.c 

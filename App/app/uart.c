@@ -1,4 +1,5 @@
-/* Copyright 2023 Dual Tachyon
+/* Copyright 2025 muzkr https://github.com/muzkr
+ * Copyright 2023 Dual Tachyon
  * https://github.com/DualTachyon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,9 +25,7 @@
 #endif
 #include "app/uart.h"
 #include "board.h"
-#include "bsp/dp32g030/dma.h"
-#include "bsp/dp32g030/gpio.h"
-#include "driver/aes.h"
+#include "py32f071_ll_dma.h"
 #include "driver/backlight.h"
 #include "driver/bk4819.h"
 #include "driver/crc.h"
@@ -218,6 +217,8 @@ static void SendVersion(void)
 #ifndef ENABLE_FEAT_F4HWN
 static bool IsBadChallenge(const uint32_t *pKey, const uint32_t *pIn, const uint32_t *pResponse)
 {
+    // PY32 has no AES hardware
+    /*
     unsigned int i;
     uint32_t     IV[4];
 
@@ -231,6 +232,7 @@ static bool IsBadChallenge(const uint32_t *pKey, const uint32_t *pIn, const uint
     for (i = 0; i < 4; i++)
         if (IV[i] != pResponse[i])
             return true;
+    */
 
     return false;
 }
@@ -489,9 +491,9 @@ bool UART_IsCommandAvailable(void)
     uint16_t Index;
     uint16_t TailIndex;
     uint16_t Size;
-    uint16_t CRC;
+    uint16_t Crc;
     uint16_t CommandLength;
-    uint16_t DmaLength = DMA_CH0->ST & 0xFFFU;
+    uint16_t DmaLength = sizeof(UART_DMA_Buffer) - LL_DMA_GetDataLength(DMA1, LL_DMA_CHANNEL_2);
 
     while (1)
     {
@@ -572,9 +574,9 @@ bool UART_IsCommandAvailable(void)
             UART_Command.Buffer[i] ^= Obfuscation[i % 16];
     }
     
-    CRC = UART_Command.Buffer[Size] | (UART_Command.Buffer[Size + 1] << 8);
+    Crc = UART_Command.Buffer[Size] | (UART_Command.Buffer[Size + 1] << 8);
 
-    return (CRC_Calculate(UART_Command.Buffer, Size) != CRC) ? false : true;
+    return (CRC_Calculate(UART_Command.Buffer, Size) != Crc) ? false : true;
 }
 
 void UART_HandleCommand(void)

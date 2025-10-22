@@ -18,60 +18,71 @@
 #define DRIVER_GPIO_H
 
 #include <stdint.h>
+#include "py32f071_ll_gpio.h"
+
 
 enum GPIOA_PINS {
-    GPIOA_PIN_KEYBOARD_0 = 3,
-    GPIOA_PIN_KEYBOARD_1 = 4,
-    GPIOA_PIN_KEYBOARD_2 = 5,
-    GPIOA_PIN_KEYBOARD_3 = 6,
-    GPIOA_PIN_KEYBOARD_4 = 10, // Shared with I2C!
-    GPIOA_PIN_KEYBOARD_5 = 11, // Shared with I2C!
-    GPIOA_PIN_KEYBOARD_6 = 12, // Shared with voice chip!
-    GPIOA_PIN_KEYBOARD_7 = 13, // Shared with voice chip!
+    GPIOA_PIN_SPI2_SCK   = 0,
+    GPIOA_PIN_SPI2_MOSI  = 1,
+    GPIOA_PIN_SPI2_MISO  = 2,
+    GPIOA_PIN_SPI2_CS    = 3,
 
-    GPIOA_PIN_I2C_SCL    = 10, // Shared with keyboard!
-    GPIOA_PIN_I2C_SDA    = 11, // Shared with keyboard!
+    GPIOA_PIN_ST7565_A0  = 6,
 
-    GPIOA_PIN_VOICE_0    = 12, // Shared with keyboard!
-    GPIOA_PIN_VOICE_1    = 13  // Shared with keyboard!
+    GPIOA_PIN_AUDIO_PATH = 8,
+
+    GPIOA_PIN_SWD_IO     = 13,
+    GPIOA_PIN_SWD_CLK    = 14,
 };
 
 enum GPIOB_PINS {
-    GPIOB_PIN_BACKLIGHT  = 6,
+    GPIOB_PIN_KEYBOARD_0 = 15,
+    GPIOB_PIN_KEYBOARD_1 = 14,
+    GPIOB_PIN_KEYBOARD_2 = 13,
+    GPIOB_PIN_KEYBOARD_3 = 12,
+    GPIOB_PIN_KEYBOARD_4 = 6,
+    GPIOB_PIN_KEYBOARD_5 = 5,
+    GPIOB_PIN_KEYBOARD_6 = 4,
+    GPIOB_PIN_KEYBOARD_7 = 3,
 
-    GPIOB_PIN_ST7565_A0  = 9,
-    GPIOB_PIN_ST7565_RES = 11, // Shared with SWD!
+    GPIOB_PIN_PTT        = 10,
 
-    GPIOB_PIN_SWD_IO     = 11, // Shared with ST7565!
-    GPIOB_PIN_SWD_CLK    = 14,
+    GPIOB_PIN_BK1080     = 15,
 
-    GPIOB_PIN_BK1080     = 15
+    GPIOB_PIN_BK4819_SCL = 8,
+    GPIOB_PIN_BK4819_SDA = 9,
 };
 
 enum GPIOC_PINS {
-    GPIOC_PIN_BK4819_SCN = 0,
-    GPIOC_PIN_BK4819_SCL = 1,
-    GPIOC_PIN_BK4819_SDA = 2,
-
-    GPIOC_PIN_FLASHLIGHT = 3,
-    GPIOC_PIN_AUDIO_PATH = 4,
-    GPIOC_PIN_PTT        = 5
+    GPIOC_PIN_FLASHLIGHT = 13,
 };
 
-static inline void GPIO_ClearBit(volatile uint32_t *pReg, uint8_t Bit) {
-    *pReg &= ~(1U << Bit);
+enum GPIOF_PINS {
+    GPIOF_PIN_I2C_SCL    = 5,
+    GPIOF_PIN_I2C_SDA    = 6,
+
+    GPIOF_PIN_BACKLIGHT  = 8,
+
+    GPIOF_PIN_BK4819_SCN = 9,
+};
+
+// Convert pin ID to pin mask
+#define GPIO_PIN_MASK(id)    (1u << (id))
+
+static inline void GPIO_SetAudioPath() {
+    LL_GPIO_SetOutputPin(GPIOA, GPIO_PIN_MASK(GPIOA_PIN_AUDIO_PATH));
 }
 
-static inline uint8_t GPIO_CheckBit(volatile uint32_t *pReg, uint8_t Bit) {
-    return (*pReg >> Bit) & 1U;
+static inline void GPIO_ResetAudioPath() {
+    LL_GPIO_ResetOutputPin(GPIOA, GPIO_PIN_MASK(GPIOA_PIN_AUDIO_PATH));
 }
 
-static inline void GPIO_FlipBit(volatile uint32_t *pReg, uint8_t Bit) {
-    *pReg ^= 1U << Bit;
+static inline void GPIO_SetBacklight() {
+    LL_GPIO_SetOutputPin(GPIOF, GPIO_PIN_MASK(GPIOF_PIN_BACKLIGHT));
 }
 
-static inline void GPIO_SetBit(volatile uint32_t *pReg, uint8_t Bit) {
-    *pReg |= 1U << Bit;
+static inline void GPIO_ResetBacklight() {
+    LL_GPIO_ResetOutputPin(GPIOF, GPIO_PIN_MASK(GPIOF_PIN_BACKLIGHT));
 }
 
 #endif

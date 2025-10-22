@@ -1,9 +1,13 @@
 #ifdef ENABLE_FLASHLIGHT
 
 #include "driver/gpio.h"
-#include "bsp/dp32g030/gpio.h"
+#include "app/flashlight.h"
+#include <stdbool.h>
 
-#include "flashlight.h"
+#define FLASHLIGHT_PIN      GPIO_PIN_MASK(GPIOC_PIN_FLASHLIGHT)
+static inline void Flashlight_TurnOn(){ LL_GPIO_SetOutputPin(GPIOC, FLASHLIGHT_PIN); }
+static inline void Flashlight_TurnOff(){ LL_GPIO_ResetOutputPin(GPIOC, FLASHLIGHT_PIN); }
+static inline void Flashlight_Toggle(){ LL_GPIO_TogglePin(GPIOC, FLASHLIGHT_PIN); }
 
 #if !defined(ENABLE_FEAT_F4HWN) || defined(ENABLE_FEAT_F4HWN_RESCUE_OPS)
     enum FlashlightMode_t  gFlashLightState;
@@ -11,7 +15,7 @@
     void FlashlightTimeSlice()
     {
         if (gFlashLightState == FLASHLIGHT_BLINK && (gFlashLightBlinkCounter & 15u) == 0) {
-            GPIO_FlipBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+            Flashlight_Toggle();
             return;
         }
 
@@ -28,9 +32,9 @@
 
             if (gFlashLightBlinkCounter == next) {
                 if (c==0) {
-                    GPIO_ClearBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+                    Flashlight_TurnOff();
                 } else {
-                    GPIO_FlipBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+                    Flashlight_Toggle();
                 }
 
                 if (c >= 18) {
@@ -51,7 +55,7 @@
         switch (gFlashLightState) {
             case FLASHLIGHT_OFF:
                 gFlashLightState++;
-                GPIO_SetBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+                Flashlight_TurnOn();
                 break;
             case FLASHLIGHT_ON:
             case FLASHLIGHT_BLINK:
@@ -60,7 +64,7 @@
             case FLASHLIGHT_SOS:
             default:
                 gFlashLightState = 0;
-                GPIO_ClearBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+                Flashlight_TurnOff();
         }
     }
 #else
@@ -70,11 +74,11 @@
 
         if(gFlashLightState)
         {
-            GPIO_ClearBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+            Flashlight_TurnOff();
         }
         else
         {
-            GPIO_SetBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);    
+            Flashlight_TurnOn();
         }
 
         gFlashLightState = (gFlashLightState) ? false : true;

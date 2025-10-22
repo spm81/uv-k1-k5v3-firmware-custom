@@ -14,9 +14,9 @@
  *     limitations under the License.
  */
 
-#include "ARMCM0.h"
+#include "py32f0xx.h"
 #include "systick.h"
-#include "../misc.h"
+#include "misc.h"
 
 // 0x20000324
 static uint32_t gTickMultiplier;
