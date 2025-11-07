@@ -152,7 +152,12 @@ class _DeviceInfo(_State):
             f"AES challenge: {AES_challenge[0]:08x} {AES_challenge[1]:08x} {AES_challenge[2]:08x} {AES_challenge[3]:08x}"
         )
 
-        return _AccessRequest(self.dump, dev_info, self.timestamp)
+        # return _AccessRequest(self.dump, dev_info, self.timestamp)
+        try:
+            return _DumpEeprom(self.dump, self.timestamp)
+        except:
+            #
+            return False
 
     def send_request(self):
 
