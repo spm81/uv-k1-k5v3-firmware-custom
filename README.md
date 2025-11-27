@@ -318,6 +318,9 @@ Once finished, your radio restart with the new firmware.
 
 When the process is complete, click `Download calibration.dat` to save the file to your computer.
 
+> [!NOTE]
+> A good practice is to rename your calibration file using the serial number of your radio, which you can find on the label on the back of the device once you remove the battery. This helps avoid mixing up calibration files when you own multiple units.
+
 ### Restore
 
 - Open UVTools2 in [restore](https://armel.github.io/uvtools2/?mode=restore) mode (or click the Restore Calib tab).
