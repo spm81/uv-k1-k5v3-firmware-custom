@@ -23,6 +23,7 @@
 #include "app/generic.h"
 #include "audio.h"
 #include "driver/bk1080.h"
+#include "driver/bk4819.h"
 #include "driver/py25q16.h"
 #include "driver/gpio.h"
 #include "functions.h"
@@ -108,6 +109,10 @@ void FM_TurnOff(void)
     gEnableSpeaker = false;
 
     BK1080_Init0();
+
+    // Enable relevant LNA based on VFO frequency
+    BK4819_PickRXFilterPathBasedOnFrequency(gRxVfo->freq_config_RX.Frequency);
+
 
     gUpdateStatus  = true;
 
@@ -619,6 +624,8 @@ void FM_Start(void)
     gFM_RestoreCountdown_10ms = 0;
 
     BK1080_Init(gEeprom.FM_FrequencyPlaying, gEeprom.FM_Band/*, gEeprom.FM_Space*/);
+    // Disable UHF LNA, enable VHF LNA
+    BK4819_PickRXFilterPathBasedOnFrequency(10320000); // 103.2 MHz < 280 MHz
 
     AUDIO_AudioPathOn();
 
