@@ -184,7 +184,15 @@ enable_feature(ENABLE_EXTRA_UART_CMD)
 
 enable_feature(ENABLE_FEAT_F4HWN)
 enable_feature(ENABLE_FEAT_F4HWN_GAME 
+	app/launcher.c
     app/breakout.c
+	app/snake.c
+	app/minesweeper.c
+	app/cw.c
+	app/matrix.c
+	app/rtttl.c
+	app/motorcycle.c
+	app/morse.c
 )
 enable_feature(ENABLE_FEAT_F4HWN_SCREENSHOT 
     screenshot.c
