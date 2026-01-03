@@ -3,10 +3,12 @@
 #include "app/snake.h"
 #include "app/minesweeper.h"
 #include "app/cw.h"
-#include "app/matrix.h"
-#include "app/rtttl.h"
+//#include "app/matrix.h"
+//#include "app/rtttl.h"
 #include "app/motorcycle.h"
 #include "app/morse.h"
+#include "app/callsign.h"
+#include "app/gps_app.h"
 
 #include "driver/keyboard.h"
 #include "driver/st7565.h"
@@ -22,11 +24,13 @@
 static const char* menuItems[MAX_ITEMS] = {
 	"CW TX/RX",
 	"CW Trainer",
+	"Callsign Country Lookup",
+	"GPS & GRID",
 	"Breakout",
 	"Minesweeper",
 	"Snake",
-	"Matrix",
-	"Music Player",
+	//"Matrix",
+	//"Music Player",
 	"Motorcycle"
 };
 
@@ -131,11 +135,13 @@ void APP_RunLauncher(void) {
             switch(selectedIndex) {
                 case 0: APP_RunCW(); break;
 				case 1: Morse_App_Loop(); break;
-                case 2: APP_RunBreakout(); break;
-                case 3: APP_RunMinesweeper(); break;
-                case 4: APP_RunSnake(); break;
-				case 5: APP_RunMatrix(); break;
-				case 6: APP_RunRTTTL(); break;
+				case 2: APP_RunCallSign(); break;
+				case 3: APP_RunGPS(); break;
+                case 4: APP_RunBreakout(); break;
+                case 5: APP_RunMinesweeper(); break;
+                case 6: APP_RunSnake(); break;
+				//case 7: APP_RunMatrix(); break;
+				//case 8: APP_RunRTTTL(); break;
 				case 7: APP_RunMotorcycle(); break;
             }
             
