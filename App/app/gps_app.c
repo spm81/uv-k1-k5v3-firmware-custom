@@ -56,15 +56,24 @@ APRS_Settings_t aprs_config = {
 #define RX_BUF_SIZE 180 
 static char rx_buffer[RX_BUF_SIZE] = ""; 
 
-// ตัวแปรเก็บค่า GPS
-static char val_lat[16]   = "13.7415";
-static char val_lon[16]   = "100.4893";
+// ตัวแปรเก็บค่า GPS (ปัจจุบัน)
+static char val_lat[16]   = "13.74147";
+static char val_lon[16]   = "100.48924";
 static char val_alt[10]   = "0.0";
 static char val_sats[5]   = "0";
 static char val_speed[10] = "0";
 static char val_course[10]= "0";
 static char val_time[10]  = "-";
 static char val_date[16]  = "-"; 
+
+// ตัวแปรเก็บค่าพิกัดเป้าหมาย (Destination)
+// *** แก้ไขตรงนี้: เพิ่ม Space หน้า Lon ให้รองรับ -180.xxxxx ได้ ***
+static char val_lat_dst[16] = " 13.74147"; 
+static char val_lon_dst[16] = " 100.48924"; // เพิ่ม space ด้านหน้า
+
+// ตัวแปรสถานะการแก้ไขในหน้า NAV
+static bool is_editing_nav = false;
+static int nav_cursor = 0;
 
 // ตัวแปรเก็บค่า Grid Locator ของเรา (จาก GPS)
 static char val_grid[7] = "------";
@@ -73,10 +82,12 @@ static char val_grid[7] = "------";
 // 2. Custom Math Functions (Clean Format)
 // ==========================================
 
-// แปลง String เป็น Float
+// แปลง String เป็น Float (รองรับช่องว่างนำหน้า)
 float my_atof(const char* s) {
     float rez = 0, fact = 1;
+    while (*s == ' ') s++; // ข้ามช่องว่าง
     if (*s == '-') { s++; fact = -1; }
+    
     int point_seen = 0;
     float d_point = 10.0f;
     for (; *s; s++) {
@@ -96,21 +107,18 @@ float my_atof(const char* s) {
 
 float my_abs(float x) { return (x < 0) ? -x : x; }
 
-// Square Root (ปรับปรุงใหม่: วนลูป 20 รอบ เพื่อความแม่นยำระยะใกล้)
+// Square Root
 float my_sqrt(float n) {
     if (n <= 0) return 0;
     float x = n;
-    // ถ้าค่าน้อยกว่า 1 ให้เริ่มเดาที่ 1 เพื่อให้ลู่เข้าหาค่าจริงได้เร็วกว่า
     if (x < 1.0f) x = 1.0f; 
-    
-    // วนลูป 20 รอบ (Newton-Raphson method)
     for (int i = 0; i < 20; i++) {
         x = 0.5f * (x + n / x);
     }
     return x;
 }
 
-// Cosine (Taylor Series)
+// Cosine
 float my_cos(float x) {
     while (x > PI) { x -= 2 * PI; }
     while (x < -PI) { x += 2 * PI; }
@@ -118,7 +126,7 @@ float my_cos(float x) {
     return 1.0f - (x2 / 2.0f) + (x2 * x2 / 24.0f) - (x2 * x2 * x2 / 720.0f);
 }
 
-// Sine (Taylor Series)
+// Sine
 float my_sin(float x) {
     while (x > PI) { x -= 2 * PI; }
     while (x < -PI) { x += 2 * PI; }
@@ -145,7 +153,7 @@ float my_atan2(float y, float x) {
     return a;
 }
 
-// Haversine Formula (Distance)
+// Haversine Formula
 void CalculateDistanceBearing(float lat1, float lon1, float lat2, float lon2, float *dist, float *bearing) {
     float rLat1 = lat1 * DEG2RAD;
     float rLon1 = lon1 * DEG2RAD;
@@ -155,7 +163,6 @@ void CalculateDistanceBearing(float lat1, float lon1, float lat2, float lon2, fl
     float dLat = rLat2 - rLat1;
     float dLon = rLon2 - rLon1;
 
-    // 1. Distance using Haversine
     float a = (my_sin(dLat / 2.0f) * my_sin(dLat / 2.0f)) +
               (my_cos(rLat1) * my_cos(rLat2) * my_sin(dLon / 2.0f) * my_sin(dLon / 2.0f));
     
@@ -165,7 +172,6 @@ void CalculateDistanceBearing(float lat1, float lon1, float lat2, float lon2, fl
     float c = 2.0f * my_atan2(my_sqrt(a), my_sqrt(1.0f - a));
     *dist = R_EARTH * c;
 
-    // 2. Bearing
     float y = my_sin(dLon) * my_cos(rLat2);
     float x = my_cos(rLat1) * my_sin(rLat2) - my_sin(rLat1) * my_cos(rLat2) * my_cos(dLon);
     *bearing = my_atan2(y, x) * RAD2DEG;
@@ -219,18 +225,14 @@ void SetupUART() {
     RCC->APBENR2 |= RCC_APBENR2_USART1EN; RCC->IOPENR |= RCC_IOPENR_GPIOAEN;
     GPIOA->MODER &= ~(GPIO_MODER_MODE2 | GPIO_MODER_MODE3); GPIOA->MODER |= (GPIO_MODER_MODE2_1 | GPIO_MODER_MODE3_1); 
     GPIOA->AFR[0] &= ~((0xF << 8) | (0xF << 12)); GPIOA->AFR[0] |= ((0x1 << 8) | (0x1 << 12)); 
-    UART1->BRR = 0x1388; UART1->CR1 = (USART_CR1_UE | USART_CR1_RE | USART_CR1_TE);
+    // 9600 = 0x1388 , 19200 = 0x9C4 , 38400 = 0x04E2
+	UART1->BRR = 0x04E2; UART1->CR1 = (USART_CR1_UE | USART_CR1_RE | USART_CR1_TE);
 }
 
-// *** แก้ไขฟังก์ชันนี้เพื่อแก้ Warning ***
 void UART_SendByte(uint8_t data) {
-    while (!(UART1->SR & USART_SR_TXE)) {
-        // รอจนกว่า TXE (Transmit Empty) จะพร้อม
-    }
+    while (!(UART1->SR & USART_SR_TXE)) {}
     UART1->DR = data;
-    while (!(UART1->SR & USART_SR_TC)) {
-        // รอจนกว่า TC (Transmit Complete) จะเสร็จสมบูรณ์
-    }
+    while (!(UART1->SR & USART_SR_TC)) {}
 }
 
 void DrawProgressBar(int percent) {
@@ -246,7 +248,7 @@ void DrawProgressBar(int percent) {
 
 void DrawGPSInfoContent(int page) {
     if (page == 0) {
-        UI_PrintStringSmallBold("GPS INFO", 0, 0, 0); UI_PrintStringSmallNormal("(1/3)", 70, 0, 0);
+        UI_PrintStringSmallBold("GPS INFO", 0, 0, 0); UI_PrintStringSmallNormal("(1/3)", 94, 0, 0);
 		UI_DrawRectangleBuffer(gFrameBuffer, 0, 10, 127, 11, true); 
         UI_PrintStringSmallBold("Lat:", 0, 0, 2); UI_PrintStringSmallNormal(val_lat, 38, 0, 2);
         UI_PrintStringSmallBold("Lon:", 0, 0, 3); UI_PrintStringSmallNormal(val_lon, 38, 0, 3);
@@ -256,16 +258,83 @@ void DrawGPSInfoContent(int page) {
         UI_PrintStringSmallBold("Sats:", 0, 0, 6); UI_PrintStringSmallNormal(val_sats, 38, 0, 6);
     } 
     else if (page == 1) {
-        UI_PrintStringSmallBold("GPS NAV", 0, 0, 0); UI_PrintStringSmallNormal("(2/3)", 70, 0, 0);
+        UI_PrintStringSmallBold("NAVIGATION", 0, 0, 0); UI_PrintStringSmallNormal("(2/3)", 94, 0, 0);
 		UI_DrawRectangleBuffer(gFrameBuffer, 0, 10, 127, 11, true); 
-        UI_PrintStringSmallBold("Spd:", 0, 0, 3); UI_PrintStringSmallNormal(val_speed, 38, 0, 3); UI_PrintStringSmallNormal("km/h", 70, 0, 3);
-        UI_PrintStringSmallBold("Dir:", 0, 0, 5); UI_PrintStringSmallNormal(val_course, 38, 0, 5); UI_PrintStringSmallNormal("deg", 70, 0, 5);
+        
+        char buff[32];
+        UI_PrintStringSmallBold("Lat Dst:", 0, 0, 2); UI_PrintStringSmallNormal(val_lat_dst, 64, 0, 2);
+        UI_PrintStringSmallBold("Lon Dst:", 0, 0, 3); UI_PrintStringSmallNormal(val_lon_dst, 57, 0, 3);
+        
+        float lat1 = my_atof(val_lat);
+        float lon1 = my_atof(val_lon);
+        float lat2 = my_atof(val_lat_dst);
+        float lon2 = my_atof(val_lon_dst);
+        float dist, bear;
+        CalculateDistanceBearing(lat1, lon1, lat2, lon2, &dist, &bear);
+        
+        //sprintf(buff, "Dir To Dst: %d deg", (int)bear); UI_PrintStringSmallBold(buff, 0, 0, 4);
+		UI_PrintStringSmallBold("Dir To Dst:", 0, 0, 4); sprintf(buff, "%d", (int)bear); UI_PrintStringSmallNormal(buff, 78, 0, 4); UI_PrintStringSmallBold("deg", 106, 0, 4);
+        int d_int = (int)dist; int d_dec = (int)((dist - d_int)*10);
+        //sprintf(buff, "Dist: %d.%d km", d_int, d_dec); UI_PrintStringSmallBold(buff, 0, 0, 5);
+		UI_PrintStringSmallBold("Distance:", 0, 0, 5); sprintf(buff, "%d.%d", d_int, d_dec); UI_PrintStringSmallNormal(buff, 63, 0, 5); UI_PrintStringSmallBold("km", 113, 0, 5);
+
+        UI_PrintStringSmallBold("Spd:", 0, 0, 6); UI_PrintStringSmallNormal(val_speed, 30, 0, 6); 
+        UI_PrintStringSmallBold("Dir:", 64, 0, 6); UI_PrintStringSmallNormal(val_course, 94, 0, 6);
+
+        if (is_editing_nav) {
+            int len_lat = strlen(val_lat_dst);
+            int cursor_x = 0; int cursor_y = 0;
+            if (nav_cursor < len_lat) {
+                cursor_x = 65 + (nav_cursor * 7); cursor_y = 14;
+            } else {
+                cursor_x = 58 + ((nav_cursor - len_lat) * 7); cursor_y = 31;
+            }
+            UI_DrawRectangleBuffer(gFrameBuffer, cursor_x, cursor_y, cursor_x + 5, cursor_y, true);
+        }
     }
     else {
-        UI_PrintStringSmallBold("DATE/TIME", 0, 0, 0); UI_PrintStringSmallNormal("(3/3)", 70, 0, 0);
+        UI_PrintStringSmallBold("DATE/TIME", 0, 0, 0); UI_PrintStringSmallNormal("(3/3)", 94, 0, 0);
 		UI_DrawRectangleBuffer(gFrameBuffer, 0, 10, 127, 11, true); 
         UI_PrintStringSmallBold("Date:", 0, 0, 3); UI_PrintStringSmallNormal(val_date, 38, 0, 3);
         UI_PrintStringSmallBold("UTC Time:", 0, 0, 5); UI_PrintStringSmallNormal(val_time, 65, 0, 5);
+    }
+}
+
+// ฟังก์ชันจัดการปุ่มกดสำหรับหน้า NAV (Edit Mode)
+void HandleNavEdit(KEY_Code_t key) {
+    if (key == KEY_MENU) {
+        int len_lat = strlen(val_lat_dst);
+        int len_lon = strlen(val_lon_dst);
+        int total_len = len_lat + len_lon;
+        nav_cursor++; if (nav_cursor >= total_len) nav_cursor = 0;
+        WaitForRelease();
+    }
+    else if (key == KEY_UP || key == KEY_DOWN) {
+        int len_lat = strlen(val_lat_dst);
+        char *target_str; int idx;
+        if (nav_cursor < len_lat) { target_str = val_lat_dst; idx = nav_cursor; } 
+        else { target_str = val_lon_dst; idx = nav_cursor - len_lat; }
+        
+        char c = target_str[idx];
+        
+        // Cycle: ' ' <-> '-' <-> '.' <-> '0'...'9'
+        if (key == KEY_DOWN) {
+            if (c == ' ') c = '-';
+            else if (c == '-') c = '.';
+            else if (c == '.') c = '0';
+            else if (c >= '0' && c < '9') c++;
+            else if (c == '9') c = ' ';
+            else c = '0'; 
+        } else {
+            if (c == ' ') c = '9';
+            else if (c > '0' && c <= '9') c--;
+            else if (c == '0') c = '.';
+            else if (c == '.') c = '-';
+            else if (c == '-') c = ' ';
+            else c = '0';
+        }
+        target_str[idx] = c;
+        volatile uint32_t d = 600000; while(d--);
     }
 }
 
@@ -273,17 +342,41 @@ void SubApp_GPS_Info(void) {
     SetupUART(); int current_page = 0; WaitForRelease(); 
     while (1) {
         memset(rx_buffer, 0, RX_BUF_SIZE); int idx = 0; bool complete = false; int max_len = 120; 
+        
         while (idx < max_len) {
             KEY_Code_t key = KEYBOARD_Poll();
-            if (key == KEY_EXIT) { WaitForRelease(); return; }
-            if (key == KEY_DOWN) { current_page++; if (current_page > 2) current_page = 0; WaitForRelease(); }
-            if (key == KEY_UP)  { current_page--; if (current_page < 0) current_page = 2; WaitForRelease(); }
-            if (idx % 2 == 0) { UI_DisplayClear(); DrawGPSInfoContent(current_page); DrawProgressBar((idx * 100) / max_len); ST7565_BlitFullScreen(); }
-            UART_SendByte((uint8_t)idx); volatile uint32_t t = 100000; char c = 0; bool g = false;
+            
+            if (key == KEY_EXIT) {
+                if (is_editing_nav) { is_editing_nav = false; WaitForRelease(); } 
+                else { WaitForRelease(); return; }
+            }
+            
+            if (is_editing_nav && current_page == 1) { HandleNavEdit(key); } 
+            else {
+                if (key == KEY_DOWN) { current_page++; if (current_page > 2) current_page = 0; WaitForRelease(); }
+                if (key == KEY_UP)  { current_page--; if (current_page < 0) current_page = 2; WaitForRelease(); }
+                if (key == KEY_MENU && current_page == 1) { is_editing_nav = true; nav_cursor = 0; WaitForRelease(); }
+            }
+
+            if (idx % 2 == 0) { 
+                UI_DisplayClear(); DrawGPSInfoContent(current_page); 
+                if (!is_editing_nav) DrawProgressBar((idx * 100) / max_len); 
+                ST7565_BlitFullScreen(); 
+            }
+            
+            UART_SendByte((uint8_t)idx);
+			
+			// *** ปรับจูน 1: ลด Timeout ลง เพราะข้อมูลมาไวขึ้น (จาก 100,000 เหลือ 40,000) ***
+			volatile uint32_t t = 40000;
+			
+			char c = 0; bool g = false;
             while (t > 0) { t--; if (UART1->SR & USART_SR_RXNE) { c = (char)(UART1->DR & 0xFF); g = true; break; } }
             if (g) { if ((c >= '0' && c <= '9') || c == '.' || c == ',' || c == '[' || c == ']' || c == ':' || c == '-' || c == '/' || c == ' ') { rx_buffer[idx] = c; if (c == ']') { rx_buffer[idx+1] = '\0'; complete = true; break; } idx++; } }
-            volatile uint32_t delay = 8000; while (delay--) {}
+			
+			// *** ปรับจูน 2: ลด Delay ระหว่างไบต์ลง เพื่อใช้ประโยชน์จากความเร็ว 38400 bps (จาก 8,000 เหลือ 2,000) ***
+            volatile uint32_t delay = 2000; while (delay--) {}
         }
+        
         if (complete && rx_buffer[0] == '[') {
              char *p = rx_buffer + 1, *comma;
              comma = strchr(p, ','); if(comma) { *comma=0; strcpy(val_lat, p); p=comma+1; }
@@ -296,12 +389,21 @@ void SubApp_GPS_Info(void) {
              char *b = strchr(p, ']'); if(b) { *b=0; strcpy(val_date, p); }
              CalculateGrid(); 
         }
+
         for (int t = 0; t < 50; t++) { 
             KEY_Code_t key = KEYBOARD_Poll();
-            if (key == KEY_EXIT) { WaitForRelease(); return; }
-            if (key == KEY_DOWN) { current_page++; if (current_page > 2) current_page = 0; WaitForRelease(); }
-            if (key == KEY_UP)   { current_page--; if (current_page < 0) current_page = 2; WaitForRelease(); }
-            UI_DisplayClear(); DrawGPSInfoContent(current_page); ST7565_BlitFullScreen(); volatile uint32_t d = 50000; while (d--) {}
+            if (key == KEY_EXIT) {
+                if (is_editing_nav) { is_editing_nav = false; WaitForRelease(); } 
+                else { WaitForRelease(); return; }
+            }
+            if (is_editing_nav && current_page == 1) { HandleNavEdit(key); } 
+            else {
+                if (key == KEY_DOWN) { current_page++; if (current_page > 2) current_page = 0; WaitForRelease(); }
+                if (key == KEY_UP)   { current_page--; if (current_page < 0) current_page = 2; WaitForRelease(); }
+                if (key == KEY_MENU && current_page == 1) { is_editing_nav = true; nav_cursor = 0; WaitForRelease(); }
+            }
+            UI_DisplayClear(); DrawGPSInfoContent(current_page); ST7565_BlitFullScreen(); 
+            volatile uint32_t d = 60000; while (d--) {}
         }
     }
 }
