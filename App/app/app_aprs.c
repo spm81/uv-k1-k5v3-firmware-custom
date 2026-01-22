@@ -315,6 +315,11 @@ void APRS_SendBeacon_Now(void) {
     uint8_t original_power = gTxVfo->OUTPUT_POWER;
     uint32_t original_vfo_freq = gTxVfo->pTX->Frequency;
 	
+// -------------------------------------------------------------
+    // [เพิ่ม 1] จำโหมด Modulation เดิมไว้ (AM/FM/USB)
+    // -------------------------------------------------------------
+    uint8_t original_modulation = gTxVfo->Modulation;
+	
 	// แปลงความถี่ APRS จาก Config (Hz) เป็นหน่วย 10Hz
     // ตัวอย่าง: 144390000 Hz -> 14439000 (10Hz units)
     uint32_t aprs_freq_10hz = aprs_config.tx_freq / 10;
@@ -342,6 +347,12 @@ void APRS_SendBeacon_Now(void) {
 	
 	// 2. ตั้งค่าความถี่และกำลังส่ง APRS ลงใน VFO ชั่วคราว
     gTxVfo->pTX->Frequency = aprs_freq_10hz;  // ต้องใส่ความถี่นี้เพื่อให้คำนวณ Calibration ถูกย่าน
+	
+	// -------------------------------------------------------------
+    // [เพิ่ม 2] บังคับเปลี่ยนเป็นโหมด FM ก่อนส่ง
+    // -------------------------------------------------------------
+    gTxVfo->Modulation = MODULATION_FM;
+	
     //gTxVfo->OUTPUT_POWER = aprs_config.tx_power; // 0=Low, 1=Mid, 2=High
 	// ********** แก้ไขการ Map ค่ากำลังส่ง **********
     if (aprs_config.tx_power < 5) {
@@ -511,6 +522,11 @@ void APRS_SendBeacon_Now(void) {
 	// 3. คืนค่าเดิมกลับสู่ระบบ
     gTxVfo->OUTPUT_POWER = original_power;
     gTxVfo->pTX->Frequency = original_vfo_freq;
+	
+	// -------------------------------------------------------------
+    // [เพิ่ม 3] คืนค่า Modulation เดิม (เช่น ถ้าเดิมเป็น AM ก็กลับเป็น AM)
+    // -------------------------------------------------------------
+    gTxVfo->Modulation = original_modulation;
 	
 	// คำนวณและตั้งค่า Hardware กลับคืน
     RADIO_ConfigureSquelchAndOutputPower(gTxVfo);
