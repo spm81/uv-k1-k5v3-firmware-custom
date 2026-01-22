@@ -78,7 +78,7 @@ void UI_PrintStringBuffer(const char *pString, uint8_t * buffer, uint32_t char_w
     }
 }
 
-void UI_PrintString(const char *pString, uint8_t Start, uint8_t End, uint8_t Line, uint8_t Width)
+/* void UI_PrintString(const char *pString, uint8_t Start, uint8_t End, uint8_t Line, uint8_t Width)
 {
     size_t i;
     size_t Length = strlen(pString);
@@ -96,9 +96,110 @@ void UI_PrintString(const char *pString, uint8_t Start, uint8_t End, uint8_t Lin
             memcpy(gFrameBuffer[Line + 1] + ofs, &gFontBig[index][7], 7);
         }
     }
+} */
+
+// เช็คว่าเป็นสระบน/ล่าง หรือวรรณยุกต์หรือไม่
+bool IsThaiDiacritic(uint8_t charCode) {
+    // 0xD1 = ไม้หันอากาศ
+    // 0xD4-0xDA = สระอิ ถึง สระอู
+    // 0xE7-0xEE = ไม้ไต่คู้, วรรณยุกต์, การันต์
+    if (charCode == 0xD1 || 
+       (charCode >= 0xD4 && charCode <= 0xDA) || 
+       (charCode >= 0xE7 && charCode <= 0xEE)) {
+        return true;
+    }
+    return false;
 }
 
-void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_t Line, uint8_t char_width, const uint8_t *font)
+void UI_PrintString(const char *pString, uint8_t Start, uint8_t End, uint8_t Line, uint8_t Width)
+{
+    size_t i;
+    size_t Length = strlen(pString);
+
+    // สูตรจัดกึ่งกลางเดิม
+    if (End > Start)
+        Start += (((End - Start) - (Length * Width)) + 1) / 2;
+
+    unsigned int currentX = Start;
+
+    for (i = 0; i < Length; i++)
+    {
+        uint8_t charCode = (uint8_t)pString[i];
+
+        if (charCode >= 0xA1)
+        {
+            // --- ภาษาไทย ---
+            const unsigned int index = charCode - 0xA1;
+            bool isOverlay = IsThaiDiacritic(charCode);
+            
+            // ตำแหน่งที่จะวาด
+            unsigned int drawPos = currentX;
+
+            if (isOverlay) {
+                // ถ้าเป็นสระลอย ถอยหลังกลับมา 8 pixel (7px ตัวอักษร + 1px ช่องไฟ)
+                if (drawPos >= 8) drawPos -= 8; 
+            }
+
+            // เตรียมข้อมูลฟอนต์
+            const uint8_t *pTop = &THAI_FONT_BIG[index][0];
+            const uint8_t *pBot = &THAI_FONT_BIG[index][7];
+
+            if (isOverlay) {
+                // เช็คว่าเป็นวรรณยุกต์ที่ต้องการขยับขึ้นหรือไม่?
+                // 0xE8=่, 0xE9=้, 0xEA=๊, 0xEB=๋, 0xEC=์
+/*                 bool shiftUp = (charCode >= 0xE8 && charCode <= 0xEC);
+
+                // สระลอย: ใช้ OR เพื่อไม่ให้ลบตัวเดิม
+                for (int k = 0; k < 7; k++) {
+                    uint8_t valTop = pTop[k];
+                    uint8_t valBot = pBot[k];
+
+                    // *** ส่วนที่เพิ่ม: ขยับวรรณยุกต์ขึ้น 1 Pixel ***
+                    if (shiftUp) {
+                        // หลักการ: เลื่อนบิตไปทางขวา (ขึ้นบน)
+                        // เอา Bit 0 ของแถวล่าง มาใส่ที่ Bit 7 ของแถวบน
+                        valTop = (valTop >> 1) | ((valBot & 0x01) << 7);
+                        valBot = (valBot >> 1);
+                    }
+
+                    gFrameBuffer[Line + 0][drawPos + k] |= valTop;
+                    gFrameBuffer[Line + 1][drawPos + k] |= valBot;
+                }
+                // สระลอย วาดเสร็จไม่ต้องขยับ currentX */
+				
+				// สระลอย: ใช้ OR เพื่อไม่ให้ลบตัวเดิม
+				// [กรณีสระซ้อนทับ] ใช้ OR (|=) เพื่อไม่ให้ลบตัวอักษรเดิมที่อยู่ข้างล่าง
+                for (int k = 0; k < 7; k++) {
+                    gFrameBuffer[Line + 0][drawPos + k] |= pTop[k];
+                    gFrameBuffer[Line + 1][drawPos + k] |= pBot[k];
+                }
+				// *สำคัญ* วาดสระเสร็จ ไม่ต้องขยับ currentX (เพราะมันซ้อนทับ)
+				// *สำคัญ* สระลอย วาดเสร็จแล้ว "ไม่ต้อง" ขยับ currentX 
+				// เพื่อให้ตัวต่อไปมาต่อท้ายตัวพยัญชนะได้เลย
+            } 
+            else {
+                // พยัญชนะ: วาดทับเลย (memcpy)
+                memcpy(gFrameBuffer[Line + 0] + drawPos, pTop, 7);
+                memcpy(gFrameBuffer[Line + 1] + drawPos, pBot, 7);
+
+                // ขยับไป 8 พิกเซล (7 พิกเซลของตัวอักษร + 1 พิกเซลช่องว่าง)
+                currentX += 8; 
+            }
+        }
+        else 
+        {
+            // --- ภาษาอังกฤษ ---
+            if (charCode > ' ' && charCode < 127) {
+                const unsigned int index = charCode - ' ' - 1;
+                memcpy(gFrameBuffer[Line + 0] + currentX, &gFontBig[index][0], 7);
+                memcpy(gFrameBuffer[Line + 1] + currentX, &gFontBig[index][7], 7);
+            }
+            currentX += Width;
+        }
+    }
+}
+
+/* void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_t Line, uint8_t char_width, const uint8_t *font)
 {
     const size_t Length = strlen(pString);
     const unsigned int char_spacing = char_width + 1;
@@ -108,6 +209,51 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
     }
 
     UI_PrintStringBuffer(pString, gFrameBuffer[Line] + Start, char_width, font);
+} */
+
+void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_t Line, uint8_t char_width, const uint8_t *font)
+{
+    const size_t Length = strlen(pString);
+    const unsigned int char_spacing = char_width + 1;
+
+    // 1. ส่วนคำนวณตำแหน่ง (ใช้ของเดิม 100% ไม่แตะต้อง)
+    if (End > Start) {
+        Start += (((End - Start) - Length * char_spacing) + 1) / 2;
+    }
+
+    // 2. สร้าง Pointer ชี้ไปที่ตำแหน่งเริ่มวาดบนจอ
+    uint8_t *pBuffer = gFrameBuffer[Line] + Start;
+
+    // 3. วาดทีละตัว (แทนการเรียก UI_PrintStringBuffer)
+    for (size_t i = 0; i < Length; i++)
+    {
+        uint8_t charCode = (uint8_t)pString[i];
+        const uint8_t *pBitmap = 0;
+
+        if (charCode >= 0xA1) {
+            // --- ภาษาไทย ---
+            // ดึงจากฟอนต์ไทย (ลบ 0xA1 เพื่อเริ่มที่ Index 0)
+            pBitmap = THAI_FONT_SMALL_Normal[charCode - 0xA1];
+        } 
+        else {
+            // --- ภาษาอังกฤษ ---
+            // ถ้าเป็น Space (32) ปล่อย pBitmap เป็น 0 (ไม่วาด)
+            // ถ้าเป็นตัวอักษรอื่น (33+) ให้คำนวณ Index
+            if (charCode >= 33) {
+                // ลบ 33 เพราะฟอนต์ใน font.c เริ่มที่ '!' (33)
+                unsigned int index = charCode - 33; 
+                pBitmap = font + (index * char_width);
+            }
+        }
+
+        // ถ้ามีข้อมูลภาพ ให้วาดลงจอ (แปะทับลงไปเลยเหมือนเดิม)
+        if (pBitmap) {
+            memcpy(pBuffer + 1, pBitmap, char_width);
+        }
+
+        // ขยับ Pointer บนหน้าจอไปตำแหน่งถัดไป
+        pBuffer += char_spacing;
+    }
 }
 
 
@@ -277,9 +423,32 @@ static void sort(int16_t *a, int16_t *b)
       const uint8_t *p = (const uint8_t *)pString;
 
       while ((c = *p++) && c != '\0') {
-        c -= 0x20;
+		
+		// สร้าง Pointer เพื่อชี้ไปยังข้อมูลของตัวอักษรนั้นๆ
+        const uint8_t *pGlyph;
+		
+		if (c >= 0xA1) {
+            // --- กรณีภาษาไทย ---
+            // ดึงจาก THAI_FONT_3x5 (ลบ 0xA1 เพื่อเริ่ม Index 0)
+            pGlyph = THAI_FONT_3x5[c - 0xA1];
+        } 
+        else {
+            // --- กรณีภาษาอังกฤษ (เดิม) ---
+            // ป้องกัน index ติดลบ
+            if (c < 0x20) c = 0x20; 
+            
+            // ดึงจาก gFont3x5 (ลบ 0x20 ตาม Logic เดิม)
+            pGlyph = gFont3x5[c - 0x20];
+        }
+		
+        //c -= 0x20;
+		
+		// วาดตัวอักษรทีละคอลัมน์ (i = 0 ถึง 2)
         for (int i = 0; i < 3; ++i) {
-          pixels = gFont3x5[c][i];
+          //pixels = gFont3x5[c][i];
+		  
+		  pixels = pGlyph[i]; // ดึงข้อมูลจาก Pointer ที่เราเลือกไว้ข้างบน
+		  
           for (int j = 0; j < 6; ++j) {
             if (pixels & 1) {
               if (statusbar)
@@ -290,6 +459,7 @@ static void sort(int16_t *a, int16_t *b)
             pixels >>= 1;
           }
         }
+		// ขยับไปตัวถัดไป 4 pixel (กว้าง 3 + เว้น 1)
         x += 4;
       }
     }
